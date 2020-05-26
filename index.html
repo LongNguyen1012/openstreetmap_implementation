@@ -1,0 +1,175 @@
+<!DOCTYPE html5>
+<html>
+<!--
+	This file is part of OpenLevelUp!.
+
+	OpenLevelUp! is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	any later version.
+
+	OpenLevelUp! is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with OpenLevelUp!.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<!--
+	OpenLevelUp!
+	Web viewer for indoor mapping (based on OpenStreetMap data).
+	Author: Adrien PAVIE
+	
+	Example page
+-->
+<head>
+	<!-- General definitions -->
+	<title>OpenLevelUp!</title>
+	<meta charset="utf-8" />
+	<meta name="description" content="See inside buildings with OpenLevelUp! Based on OpenStreetMap indoor data." />
+	<meta name="keywords" content="openlevelup, openstreetmap, osm, building, indoor, level, floor, map, viewer" />
+	<meta name="author" content="Adrien PAVIE (PanierAvide)" />
+	<meta name="copyright" content="&copy; Adrien PAVIE 2015-2016, under AGPL v3" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<link rel="icon" type="image/png" href="img/favicon.png" />
+
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css"
+	integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ=="
+	crossorigin=""/>
+
+	<script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"
+	integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew=="
+	crossorigin=""></script>
+
+	<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+
+	<script src="https://sdk.amazonaws.com/js/aws-sdk-2.7.16.min.js"></script>
+	<script type='text/javascript' src="leaflet-routing-machine.js"></script>
+
+	<style>
+		#mapid { 
+			height: 850px; 
+			z-index: 0;
+			position: relative; 
+			outline: none;
+		}
+
+		/* Some basic page styling */
+        html, body { position: absolute; top: 0px; bottom: 0px; left: 0px; right: 0px; margin:0px; padding:0px; font-family: "Helvetica Neue",Helvetica,Arial,sans-serif; font-size: 12px; }
+
+        /* Some custom styling overrides */
+		#controls{
+			position: absolute;
+			box-sizing: border-box;
+			padding: 10px;
+			width: auto;
+			height: auto;
+			left: 50%;
+			transform: translateX(-50%);
+			bottom: 10px;
+			z-index: 1;
+		}
+
+		#controls button{
+			margin-top: 10px;
+			background-color: rgb(31, 175, 252);
+			padding: 0px 10px;
+			border-radius: 4px;
+			color: rgb(255, 255, 255);
+			width: auto;
+			border: 0;
+			display: inline-block;
+		}
+
+		/* bigger zoom-buttons */
+		.mapboxgl-ctrl-group > button{
+			width: 60px;
+			height: 60px;
+		}
+
+		.btn{
+			background-color: white;
+			box-shadow: 0px 0px 3px 0px black;
+			padding: 10px 10px;
+			border-radius: 4px;
+			text-transform: uppercase;
+			font-weight: bold;
+			cursor: pointer;
+			margin: 0px 10px;
+		}
+			
+	</style>
+</head>
+<body>
+	<div id="controls" class="mapboxgl-ctrl-group">
+        <textarea readonly id= "textarea" style="width:400px; height:10px"></textarea><br />
+        Click in the map to set the center. Use the buttons to change other properties.<br />
+        <button onClick="myMap.rotateTo( myMap.getBearing() + 45 )">Rotate map</button>
+        <button onClick="myMap.zoomOut()">Zoom Out</button>
+        <button onClick="myMap.zoomIn()">Zoom In</button>
+        <button onClick="myMap.flyTo({center: {lng: 13.270286316716465, lat: 52.502217640505705}, zoom: 17, bearing: 0, pitch: 0, speed: 0.5})">RESET</button>
+        <button onclick="readItem()">Read Item</button>
+	</div>
+	<div id="mapid" class="leaflet-container leaflet-fade-anim leaflet-grab leaflet-touch-drag" tabindex="0"></div>
+	<script>
+		var mymap = L.map('mapid').setView([43.63011, 1.37396], 17);
+		L . tileLayer ( 'http://c.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png' ,  { 
+			attribution :  'dat & eacute; es & copy; <a href = "// osm. org / copyright "> OpenStreetMap </a> / ODbL - rendering <a href="//openstreetmap.fr"> OSM France </a> ' , 
+			minZoom :  1 , 
+			maxZoom :  20
+		}). addTo ( mymap );
+
+		var you_marker = L.marker([43.63011, 1.37396]).addTo(mymap);
+
+		// function makeRoute() {
+		L.Routing.control({
+			waypoints: [
+				L.latLng(43.62944, 1.37581),
+				L.latLng(43.62911, 1.37620)
+			],
+		routeWhileDragging: true
+		}).addTo(mymap);
+		// }
+	</script>
+
+	<script>
+		AWS.config.update({
+		region: "us-west-2",
+		endpoint: 'dynamodb.us-west-2.amazonaws.com',
+		// accessKeyId default can be used while using the downloadable version of DynamoDB. 
+		// For security reasons, do not store AWS Credentials in your files. Use Amazon Cognito instead.
+		accessKeyId: "AKIAX3KNHCZ343SOWZCX",
+		// secretAccessKey default can be used while using the downloadable version of DynamoDB. 
+		// For security reasons, do not store AWS Credentials in your files. Use Amazon Cognito instead.
+		secretAccessKey: "BvWnBbe5Zb65T7aEsD0FOnntY3xBmlUW3G8cr+gn"
+		});
+		
+		var docClient = new AWS.DynamoDB.DocumentClient();
+		
+		function readItem() {
+			var table = "GSE";
+			var uuid = "2";
+			var name = "Table";
+		
+			var params = {
+				TableName: table,
+				Key:{
+					"uuid": uuid,
+					"name": name
+				}
+			};
+			docClient.get(params, function(err, data) {
+				if (err) {
+					document.getElementById('textarea').innerHTML = "Unable to read item: " + "\n" + JSON.stringify(err, undefined, 2);
+				} else {
+					document.getElementById('textarea').innerHTML = "GetItem succeeded: " + "\n" + JSON.stringify(data, undefined, 2);
+					var you_marker = L.marker([data.Item.lat, data.Item.long]).addTo(mymap);
+				}
+			});
+		}
+	</script>
+</body>
+</html>
+
+1.37431
